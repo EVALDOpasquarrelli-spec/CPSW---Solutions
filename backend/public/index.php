@@ -1,10 +1,10 @@
 <?php
 declare(strict_types=1);
 require dirname(__DIR__).'/vendor/autoload.php';
-if(class_exists(\\Dotenv\\Dotenv::class)){\\Dotenv\\Dotenv::createUnsafeImmutable(dirname(__DIR__))->safeLoad();}
-use App\\Database;
-use App\\Http;
-use App\\Auth;
+if(class_exists(\Dotenv\Dotenv::class)){\Dotenv\Dotenv::createUnsafeImmutable(dirname(__DIR__))->safeLoad();}
+use App\Database;
+use App\Http;
+use App\Auth;
 
 $origin=getenv('FRONTEND_URL')?:'http://localhost:4200';
 header('Access-Control-Allow-Origin: '.$origin);
