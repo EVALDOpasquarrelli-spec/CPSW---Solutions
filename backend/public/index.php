@@ -29,6 +29,14 @@ if($path==='/api/auth/login'&&$method==='POST')$auth->login($body);
 if($path==='/api/auth/logout'&&$method==='POST')$auth->logout();
 if($path==='/api/auth/me'&&$method==='GET')Http::json(['user'=>Http::user()]);
 if($path==='/api/categories'&&$method==='GET')Http::json(['data'=>$db->query('SELECT id,name,slug,description FROM categories WHERE active=1 ORDER BY sort_order,name')->fetchAll()]);
+if($path==='/api/auth/change-password'&&$method==='POST'){
+$u=Http::user();$current=(string)($body['current_password']??'');$next=(string)($body['new_password']??'');
+if(strlen($next)<12)Http::json(['error'=>'A nova palavra-passe deve ter pelo menos 12 caracteres.'],422);
+$s=$db->prepare('SELECT password_hash FROM users WHERE id=?');$s->execute([$u['id']]);$hash=$s->fetchColumn();
+if(!$hash||!password_verify($current,$hash))Http::json(['error'=>'A palavra-passe actual está incorrecta.'],403);
+$s=$db->prepare('UPDATE users SET password_hash=? WHERE id=?');$s->execute([password_hash($next,PASSWORD_DEFAULT),$u['id']]);session_regenerate_id(true);Http::json(['ok'=>true,'message'=>'Palavra-passe alterada com sucesso.']);
+}
+
 if($path==='/api/providers'&&$method==='GET'){
 $where=["p.status='active'"];$params=[];
 foreach(['q'=>'(p.business_name LIKE ? OR p.description LIKE ?)','city'=>'p.city LIKE ?','category'=>'c.slug = ?'] as $key=>$clause){$value=trim((string)($_GET[$key]??''));if($value!==''){$where[]=$clause;if($key==='q'){$params[]='%'.$value.'%';$params[]='%'.$value.'%';}elseif($key==='city')$params[]='%'.$value.'%';else$params[]=$value;}}
@@ -66,6 +74,7 @@ $db->beginTransaction();$s=$db->prepare("SELECT * FROM provider_applications WHE
 $s=$db->prepare('UPDATE provider_applications SET status=?,admin_notes=?,reviewed_at=NOW() WHERE id=?');$s->execute([$decision,$notes?:null,$id]);$temporaryPassword=null;
 if($decision==='approved'){
 $s=$db->prepare('SELECT id FROM users WHERE email=?');$s->execute([$a['email']]);$userId=$s->fetchColumn();
+if($userId){$db->rollBack();Http::json(['error'=>'Já existe uma conta com este e-mail. Verifique os registos antes de aprovar.'],409);}
 if(!$userId){$temporaryPassword=bin2hex(random_bytes(6));$s=$db->prepare("INSERT INTO users(name,email,phone,password_hash,role,status) VALUES(?,?,?,?, 'provider','active')");$s->execute([$a['applicant_name'],$a['email'],$a['phone'],password_hash($temporaryPassword,PASSWORD_DEFAULT)]);$userId=(int)$db->lastInsertId();}
 $slug=strtolower(trim(preg_replace('/[^a-z0-9]+/i','-',iconv('UTF-8','ASCII//TRANSLIT',$a['business_name'])?:$a['business_name']),'-')).'-'.substr(bin2hex(random_bytes(3)),0,6);
 $s=$db->prepare("INSERT INTO providers(user_id,category_id,business_name,slug,city,description,status) VALUES(?,?,?,?,?,?,'active')");$s->execute([$userId,$a['category_id'],$a['business_name'],$slug,$a['city'],$a['description']]);
