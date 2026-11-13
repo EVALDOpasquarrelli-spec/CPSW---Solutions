@@ -1,0 +1,1 @@
+import {Routes} from '@angular/router';import {HomeComponent} from './home.component';import {ApplyComponent} from './apply.component';export const routes:Routes=[{path:'',component:HomeComponent},{path:'candidatar-fornecedor',component:ApplyComponent},{path:'**',redirectTo:''}];
