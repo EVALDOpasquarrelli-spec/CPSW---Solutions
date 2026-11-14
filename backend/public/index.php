@@ -44,7 +44,7 @@ $s=$db->prepare('UPDATE users SET password_hash=? WHERE id=?');$s->execute([pass
 if($path==='/api/providers'&&$method==='GET'){
 $where=["p.status='active'"];$params=[];
 foreach(['q'=>'(p.business_name LIKE ? OR p.description LIKE ?)','city'=>'p.city LIKE ?','category'=>"EXISTS (SELECT 1 FROM provider_categories pc JOIN categories cx ON cx.id=pc.category_id WHERE pc.provider_id=p.id AND cx.slug = ?)"] as $key=>$clause){$value=trim((string)($_GET[$key]??''));if($value!==''){$where[]=$clause;if($key==='q'){$params[]='%'.$value.'%';$params[]='%'.$value.'%';}elseif($key==='city')$params[]='%'.$value.'%';else$params[]=$value;}}
-$sql='SELECT p.id,p.business_name,p.slug,p.city,p.description,p.indicative_price,p.cover_image,p.verified,p.featured,COALESCE((SELECT GROUP_CONCAT(c2.name ORDER BY pc2.is_primary DESC SEPARATOR ', ') FROM provider_categories pc2 JOIN categories c2 ON c2.id=pc2.category_id WHERE pc2.provider_id=p.id),c.name) category,c.slug category_slug FROM providers p JOIN categories c ON c.id=p.category_id WHERE '.implode(' AND ',$where).' ORDER BY p.featured DESC,p.verified DESC,p.business_name LIMIT 100';
+$sql='SELECT p.id,p.business_name,p.slug,p.city,p.description,p.indicative_price,p.cover_image,p.verified,p.featured,COALESCE((SELECT GROUP_CONCAT(c2.name ORDER BY pc2.is_primary DESC) FROM provider_categories pc2 JOIN categories c2 ON c2.id=pc2.category_id WHERE pc2.provider_id=p.id),c.name) category,c.slug category_slug FROM providers p JOIN categories c ON c.id=p.category_id WHERE '.implode(' AND ',$where).' ORDER BY p.featured DESC,p.verified DESC,p.business_name LIMIT 100';
 $s=$db->prepare($sql);$s->execute($params);Http::json(['data'=>$s->fetchAll()]);
 }
 if(preg_match('#^/api/providers/([a-z0-9-]+)$#',$path,$m)&&$method==='GET'){
