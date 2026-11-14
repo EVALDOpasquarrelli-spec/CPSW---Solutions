@@ -88,6 +88,23 @@ $s=$db->prepare("INSERT INTO providers(user_id,category_id,business_name,slug,ci
 }
 $db->commit();Http::json(['ok'=>true,'message'=>$decision==='approved'?'Fornecedor aprovado e publicado.':'Candidatura rejeitada.','temporary_password'=>$temporaryPassword]);
 }
+if($path==='/api/admin/providers'&&$method==='POST'){
+$u=Http::role('admin');$name=trim((string)($body['contact_name']??''));$business=trim((string)($body['business_name']??''));$email=strtolower(trim((string)($body['email']??'')));$phone=trim((string)($body['phone']??''));$category=(int)($body['category_id']??0);$city=trim((string)($body['city']??''));$description=trim((string)($body['description']??''));
+if(strlen($name)<3||strlen($business)<2||!filter_var($email,FILTER_VALIDATE_EMAIL)||strlen($phone)<8||$category<1||strlen($city)<2||strlen($description)<20)Http::json(['error'=>'Preencha correctamente os dados do fornecedor.'],422);
+$s=$db->prepare('SELECT id FROM categories WHERE id=? AND active=1');$s->execute([$category]);if(!$s->fetch())Http::json(['error'=>'Categoria inválida.'],422);
+$s=$db->prepare('SELECT id FROM users WHERE email=?');$s->execute([$email]);if($s->fetch())Http::json(['error'=>'Já existe uma conta com este e-mail.'],409);
+$temp=bin2hex(random_bytes(8));$slugBase=strtolower(trim(preg_replace('/[^a-z0-9]+/i','-',iconv('UTF-8','ASCII//TRANSLIT',$business)?:$business),'-'));$slug=$slugBase.'-'.substr(bin2hex(random_bytes(4)),0,8);
+$db->beginTransaction();$s=$db->prepare("INSERT INTO users(name,email,phone,password_hash,role,status) VALUES(?,?,?,?,'provider','active')");$s->execute([$name,$email,$phone,password_hash($temp,PASSWORD_DEFAULT)]);$uid=(int)$db->lastInsertId();$s=$db->prepare("INSERT INTO providers(user_id,category_id,business_name,slug,city,description,status) VALUES(?,?,?,?,?,?,'active')");$s->execute([$uid,$category,$business,$slug,$city,$description]);$pid=(int)$db->lastInsertId();$s=$db->prepare('INSERT INTO provider_categories(provider_id,category_id,is_primary) VALUES(?,?,1)');$s->execute([$pid,$category]);$audit($db,(int)$u['id'],'provider_created','provider',$pid,['email'=>$email]);$db->commit();Http::json(['ok'=>true,'message'=>'Fornecedor registado e publicado. Entregue a palavra-passe temporária por canal seguro.','temporary_password'=>$temp],201);
+}
+if($path==='/api/provider/categories'&&$method==='GET'){
+$u=Http::role('provider');$s=$db->prepare('SELECT pc.category_id,c.name,c.slug,pc.is_primary FROM provider_categories pc JOIN providers p ON p.id=pc.provider_id JOIN categories c ON c.id=pc.category_id WHERE p.user_id=? ORDER BY pc.is_primary DESC,c.name');$s->execute([$u['id']]);Http::json(['data'=>$s->fetchAll()]);
+}
+if($path==='/api/provider/categories'&&$method==='PUT'){
+$u=Http::role('provider');$ids=$body['category_ids']??[];if(!is_array($ids)||count($ids)<1||count($ids)>8)Http::json(['error'=>'Seleccione entre uma e oito categorias.'],422);$ids=array_values(array_unique(array_filter(array_map('intval',$ids),fn($v)=>$v>0)));if(!$ids||count($ids)>8)Http::json(['error'=>'Categorias inválidas.'],422);
+$db->beginTransaction();$s=$db->prepare("SELECT id FROM providers WHERE user_id=? AND status='active' FOR UPDATE");$s->execute([$u['id']]);$pid=(int)$s->fetchColumn();if(!$pid){$db->rollBack();Http::json(['error'=>'Perfil indisponível.'],404);}
+$in=implode(',',array_fill(0,count($ids),'?'));$s=$db->prepare("SELECT id FROM categories WHERE active=1 AND id IN ($in)");$s->execute($ids);$valid=array_map('intval',$s->fetchAll(PDO::FETCH_COLUMN));if(count($valid)!==count($ids)){$db->rollBack();Http::json(['error'=>'Uma ou mais categorias são inválidas.'],422);}
+$s=$db->prepare('DELETE FROM provider_categories WHERE provider_id=?');$s->execute([$pid]);$s=$db->prepare('INSERT INTO provider_categories(provider_id,category_id,is_primary) VALUES(?,?,?)');foreach($ids as $i=>$cid)$s->execute([$pid,$cid,$i===0?1:0]);$s=$db->prepare('UPDATE providers SET category_id=? WHERE id=?');$s->execute([$ids[0],$pid]);$audit($db,(int)$u['id'],'provider_categories_updated','provider',$pid,['category_ids'=>$ids]);$db->commit();Http::json(['ok'=>true]);
+}
 if($path==='/api/admin/providers'&&$method==='GET'){
 Http::role('admin');$s=$db->query('SELECT p.id,p.business_name,p.slug,p.city,p.status,p.featured,p.verified,c.name category,u.email FROM providers p JOIN categories c ON c.id=p.category_id LEFT JOIN users u ON u.id=p.user_id ORDER BY p.created_at DESC');Http::json(['data'=>$s->fetchAll()]);
 }
