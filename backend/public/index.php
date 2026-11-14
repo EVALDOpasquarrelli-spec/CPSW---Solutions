@@ -43,12 +43,13 @@ $s=$db->prepare('UPDATE users SET password_hash=? WHERE id=?');$s->execute([pass
 
 if($path==='/api/providers'&&$method==='GET'){
 $where=["p.status='active'"];$params=[];
-foreach(['q'=>'(p.business_name LIKE ? OR p.description LIKE ?)','city'=>'p.city LIKE ?','category'=>'c.slug = ?'] as $key=>$clause){$value=trim((string)($_GET[$key]??''));if($value!==''){$where[]=$clause;if($key==='q'){$params[]='%'.$value.'%';$params[]='%'.$value.'%';}elseif($key==='city')$params[]='%'.$value.'%';else$params[]=$value;}}
-$sql='SELECT p.id,p.business_name,p.slug,p.city,p.description,p.indicative_price,p.cover_image,p.verified,p.featured,c.name category,c.slug category_slug FROM providers p JOIN categories c ON c.id=p.category_id WHERE '.implode(' AND ',$where).' ORDER BY p.featured DESC,p.verified DESC,p.business_name LIMIT 100';
+foreach(['q'=>'(p.business_name LIKE ? OR p.description LIKE ?)','city'=>'p.city LIKE ?','category'=>"EXISTS (SELECT 1 FROM provider_categories pc JOIN categories cx ON cx.id=pc.category_id WHERE pc.provider_id=p.id AND cx.slug = ?)"] as $key=>$clause){$value=trim((string)($_GET[$key]??''));if($value!==''){$where[]=$clause;if($key==='q'){$params[]='%'.$value.'%';$params[]='%'.$value.'%';}elseif($key==='city')$params[]='%'.$value.'%';else$params[]=$value;}}
+$sql='SELECT p.id,p.business_name,p.slug,p.city,p.description,p.indicative_price,p.cover_image,p.verified,p.featured,COALESCE((SELECT GROUP_CONCAT(c2.name ORDER BY pc2.is_primary DESC SEPARATOR ', ') FROM provider_categories pc2 JOIN categories c2 ON c2.id=pc2.category_id WHERE pc2.provider_id=p.id),c.name) category,c.slug category_slug FROM providers p JOIN categories c ON c.id=p.category_id WHERE '.implode(' AND ',$where).' ORDER BY p.featured DESC,p.verified DESC,p.business_name LIMIT 100';
 $s=$db->prepare($sql);$s->execute($params);Http::json(['data'=>$s->fetchAll()]);
 }
 if(preg_match('#^/api/providers/([a-z0-9-]+)$#',$path,$m)&&$method==='GET'){
 $s=$db->prepare("SELECT p.id,p.business_name,p.slug,p.city,p.province,p.district,p.description,p.indicative_price,p.cover_image,p.website_url,p.instagram_url,p.facebook_url,p.verified,p.featured,c.name category,c.slug category_slug FROM providers p JOIN categories c ON c.id=p.category_id WHERE p.slug=? AND p.status='active' LIMIT 1");$s->execute([$m[1]]);$p=$s->fetch();if(!$p)Http::json(['error'=>'Fornecedor não encontrado'],404);
+$q=$db->prepare("SELECT c.name,c.slug,pc.is_primary FROM provider_categories pc JOIN categories c ON c.id=pc.category_id WHERE pc.provider_id=? ORDER BY pc.is_primary DESC,c.name");$q->execute([$p['id']]);$p['categories']=$q->fetchAll();
 $q=$db->prepare("SELECT id,name,description,price_from,price_to,price_unit FROM provider_services WHERE provider_id=? AND active=1 ORDER BY sort_order,name");$q->execute([$p['id']]);$p['services']=$q->fetchAll();
 $q=$db->prepare("SELECT id,media_type,media_url,alt_text,is_cover,sort_order FROM provider_media WHERE provider_id=? AND approved=1 ORDER BY is_cover DESC,sort_order,id");$q->execute([$p['id']]);$p['gallery']=$q->fetchAll();
 Http::json(['data'=>$p]);
