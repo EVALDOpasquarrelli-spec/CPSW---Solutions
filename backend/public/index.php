@@ -64,7 +64,7 @@ $provider=(int)($body['provider_id']??0);$name=trim((string)($body['customer_nam
 if($provider<1||strlen($name)<3||strlen($phone)<8||strlen($city)<2||strlen($message)<10||($email!==''&&!filter_var($email,FILTER_VALIDATE_EMAIL)))Http::json(['error'=>'Preencha correctamente os campos obrigatórios.'],422);
 if($date!==''&&!preg_match('/^\\d{4}-\\d{2}-\\d{2}$/',$date))Http::json(['error'=>'Data do evento inválida'],422);
 $s=$db->prepare("SELECT id FROM providers WHERE id=? AND status='active'");$s->execute([$provider]);if(!$s->fetch())Http::json(['error'=>'Este fornecedor não está disponível'],404);
-$ref='LIR-'.strtoupper(bin2hex(random_bytes(4)));
+$ref='LIR-'.strtoupper(bin2hex(random_bytes(8)));
 $s=$db->prepare('INSERT INTO service_requests(reference_code,provider_id,customer_name,customer_email,customer_phone,event_date,event_city,budget,message) VALUES(?,?,?,?,?,?,?,?,?)');
 $s->execute([$ref,$provider,$name,$email?:null,$phone,$date?:null,$city,($budget!==''&&$budget!==null)?(float)$budget:null,$message]);
 Http::json(['ok'=>true,'reference_code'=>$ref,'message'=>'Pedido enviado à equipa LIRANDZU. Acompanharemos o encaminhamento ao fornecedor.'],201);
@@ -134,7 +134,7 @@ $u=Http::role('provider');$s=$db->prepare('DELETE m FROM provider_media m JOIN p
 }
 if(preg_match('#^/api/provider/requests/(\\d+)/messages$#',$path,$m)&&in_array($method,['GET','POST'],true)){
 $u=Http::role('provider');$s=$db->prepare("SELECT r.id FROM service_requests r JOIN providers p ON p.id=r.provider_id WHERE r.id=? AND p.user_id=? AND p.status='active'");$s->execute([(int)$m[1],$u['id']]);if(!$s->fetch())Http::json(['error'=>'Pedido não encontrado.'],404);
-if($method==='GET'){$s=$db->prepare("SELECT id,sender_role,message,created_at FROM request_messages WHERE request_id=? AND delivery_target='internal' ORDER BY created_at,id");$s->execute([(int)$m[1]]);Http::json(['data'=>$s->fetchAll()]);}
+if($method==='GET'){$s=$db->prepare("SELECT id,sender_role,message,created_at FROM request_messages WHERE request_id=? AND delivery_target IN ('internal','provider') ORDER BY created_at,id");$s->execute([(int)$m[1]]);Http::json(['data'=>$s->fetchAll()]);}
 $message=trim((string)($body['message']??''));if(strlen($message)<2||strlen($message)>5000)Http::json(['error'=>'A resposta deve ter entre 2 e 5000 caracteres.'],422);
 $db->beginTransaction();$s=$db->prepare("INSERT INTO request_messages(request_id,sender_user_id,sender_role,delivery_target,message) VALUES(?,?,'provider','internal',?)");$s->execute([(int)$m[1],$u['id'],$message]);$s=$db->prepare("UPDATE service_requests SET status='answered' WHERE id=? AND status IN ('submitted','forwarded')");$s->execute([(int)$m[1]]);$audit($db,(int)$u['id'],'provider_request_reply','service_request',(int)$m[1]);$db->commit();Http::json(['ok'=>true,'message'=>'Resposta enviada à equipa LIRANDZU para revisão e encaminhamento.'],201);
 }
@@ -147,6 +147,11 @@ $db->beginTransaction();$s=$db->prepare("INSERT INTO request_messages(request_id
 if(preg_match('#^/api/admin/requests/(\\d+)/status$#',$path,$m)&&$method==='PATCH'){
 $u=Http::role('admin');$rid=(int)$m[1];$status=(string)($body['status']??'');$note=trim((string)($body['note']??''));if(!in_array($status,['submitted','forwarded','answered','closed','cancelled'],true))Http::json(['error'=>'Estado inválido.'],422);
 $db->beginTransaction();$s=$db->prepare('SELECT status FROM service_requests WHERE id=? FOR UPDATE');$s->execute([$rid]);$old=$s->fetchColumn();if($old===false){$db->rollBack();Http::json(['error'=>'Pedido não encontrado.'],404);}$s=$db->prepare('UPDATE service_requests SET status=?,closed_at=? WHERE id=?');$s->execute([$status,$status==='closed'?date('Y-m-d H:i:s'):null,$rid]);$s=$db->prepare('INSERT INTO request_status_history(request_id,old_status,new_status,changed_by,note) VALUES(?,?,?,?,?)');$s->execute([$rid,$old,$status,$u['id'],$note?:null]);$audit($db,(int)$u['id'],'request_status_changed','service_request',$rid,['from'=>$old,'to'=>$status]);$db->commit();Http::json(['ok'=>true]);
+}
+if(preg_match('#^/api/service-requests/([A-Z0-9-]+)/messages$#',$path,$m)&&$method==='POST'){
+$ref=$m[1];$message=trim((string)($body['message']??''));if(strlen($message)<2||strlen($message)>3000)Http::json(['error'=>'A mensagem deve ter entre 2 e 3000 caracteres.'],422);
+$s=$db->prepare("SELECT id,status FROM service_requests WHERE reference_code=? LIMIT 1");$s->execute([$ref]);$request=$s->fetch();if(!$request)Http::json(['error'=>'Pedido não encontrado.'],404);if(in_array($request['status'],['closed','cancelled'],true))Http::json(['error'=>'Este pedido já foi encerrado.'],409);
+$s=$db->prepare("INSERT INTO request_messages(request_id,sender_user_id,sender_role,delivery_target,message) VALUES(?,NULL,'customer','internal',?)");$s->execute([(int)$request['id'],$message]);Http::json(['ok'=>true,'message'=>'Mensagem enviada à equipa LIRANDZU.'],201);
 }
 if(preg_match('#^/api/service-requests/([A-Z0-9-]+)/status$#',$path,$m)&&$method==='GET'){
 $ref=$m[1];$s=$db->prepare('SELECT r.reference_code,r.status,r.event_city,r.event_date,p.business_name FROM service_requests r JOIN providers p ON p.id=r.provider_id WHERE r.reference_code=? LIMIT 1');$s->execute([$ref]);$r=$s->fetch();if(!$r)Http::json(['error'=>'Pedido não encontrado.'],404);$s=$db->prepare("SELECT message,created_at FROM request_messages WHERE request_id=(SELECT id FROM service_requests WHERE reference_code=?) AND delivery_target='customer' ORDER BY created_at,id");$s->execute([$ref]);$r['messages']=$s->fetchAll();Http::json(['data'=>$r]);
