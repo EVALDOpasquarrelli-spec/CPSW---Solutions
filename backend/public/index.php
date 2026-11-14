@@ -24,6 +24,10 @@ $path=rtrim(parse_url($_SERVER['REQUEST_URI'],PHP_URL_PATH)?:'/','/')?:'/';
 $method=$_SERVER['REQUEST_METHOD'];
 $body=in_array($method,['POST','PATCH'],true)?Http::body():[];
 $auth=new Auth($db);
+$audit=static function(PDO $db,?int $actor,string $action,string $type,?int $entity,array $details=[]):void{
+ $s=$db->prepare('INSERT INTO audit_logs(actor_user_id,action,entity_type,entity_id,details,ip_address) VALUES(?,?,?,?,?,?)');
+ $s->execute([$actor,$action,$type,$entity,$details?json_encode($details,JSON_UNESCAPED_UNICODE):null,$_SERVER['REMOTE_ADDR']??null]);
+};
 if($path==='/api/health')Http::json(['ok'=>true,'service'=>'lirandzu-api']);
 if($path==='/api/auth/login'&&$method==='POST')$auth->login($body);
 if($path==='/api/auth/logout'&&$method==='POST')$auth->logout();
@@ -44,7 +48,10 @@ $sql='SELECT p.id,p.business_name,p.slug,p.city,p.description,p.indicative_price
 $s=$db->prepare($sql);$s->execute($params);Http::json(['data'=>$s->fetchAll()]);
 }
 if(preg_match('#^/api/providers/([a-z0-9-]+)$#',$path,$m)&&$method==='GET'){
-$s=$db->prepare("SELECT p.id,p.business_name,p.slug,p.city,p.description,p.indicative_price,p.cover_image,p.verified,p.featured,c.name category,c.slug category_slug FROM providers p JOIN categories c ON c.id=p.category_id WHERE p.slug=? AND p.status='active' LIMIT 1");$s->execute([$m[1]]);$p=$s->fetch();if(!$p)Http::json(['error'=>'Fornecedor não encontrado'],404);Http::json(['data'=>$p]);
+$s=$db->prepare("SELECT p.id,p.business_name,p.slug,p.city,p.province,p.district,p.description,p.indicative_price,p.cover_image,p.website_url,p.instagram_url,p.facebook_url,p.verified,p.featured,c.name category,c.slug category_slug FROM providers p JOIN categories c ON c.id=p.category_id WHERE p.slug=? AND p.status='active' LIMIT 1");$s->execute([$m[1]]);$p=$s->fetch();if(!$p)Http::json(['error'=>'Fornecedor não encontrado'],404);
+$q=$db->prepare("SELECT id,name,description,price_from,price_to,price_unit FROM provider_services WHERE provider_id=? AND active=1 ORDER BY sort_order,name");$q->execute([$p['id']]);$p['services']=$q->fetchAll();
+$q=$db->prepare("SELECT id,media_type,media_url,alt_text,is_cover,sort_order FROM provider_media WHERE provider_id=? AND approved=1 ORDER BY is_cover DESC,sort_order,id");$q->execute([$p['id']]);$p['gallery']=$q->fetchAll();
+Http::json(['data'=>$p]);
 }
 if($path==='/api/provider-applications'&&$method==='POST'){
 $n=trim((string)($body['applicant_name']??''));$b=trim((string)($body['business_name']??''));$e=strtolower(trim((string)($body['email']??'')));$ph=trim((string)($body['phone']??''));$c=(int)($body['category_id']??0);$city=trim((string)($body['city']??''));$d=trim((string)($body['description']??''));
@@ -97,7 +104,52 @@ if($path==='/api/provider/profile'&&$method==='PATCH'){
 $u=Http::role('provider');$name=trim((string)($body['business_name']??''));$city=trim((string)($body['city']??''));$description=trim((string)($body['description']??''));$price=$body['indicative_price']??null;$image=trim((string)($body['cover_image']??''));if(strlen($name)<2||strlen($city)<2||strlen($description)<20||($price!==null&&$price!==''&&!is_numeric($price))||($image!==''&&!filter_var($image,FILTER_VALIDATE_URL)))Http::json(['error'=>'Dados do perfil inválidos'],422);$s=$db->prepare("UPDATE providers SET business_name=?,city=?,description=?,indicative_price=?,cover_image=? WHERE user_id=? AND status='active'");$s->execute([$name,$city,$description,($price===''?null:$price),$image?:null,$u['id']]);Http::json(['ok'=>true,'message'=>'Perfil actualizado.']);
 }
 if($path==='/api/provider/requests'&&$method==='GET'){
-$u=Http::role('provider');$s=$db->prepare("SELECT r.id,r.reference_code,r.customer_name,r.customer_phone,r.customer_email,r.event_date,r.event_city,r.budget,r.message,r.status,r.created_at FROM service_requests r JOIN providers p ON p.id=r.provider_id WHERE p.user_id=? AND p.status='active' ORDER BY r.created_at DESC");$s->execute([$u['id']]);Http::json(['data'=>$s->fetchAll()]);
+$u=Http::role('provider');$s=$db->prepare("SELECT r.id,r.reference_code,r.event_date,r.event_city,r.event_province,r.event_district,r.budget,r.message,r.status,r.created_at,p.business_name FROM service_requests r JOIN providers p ON p.id=r.provider_id WHERE p.user_id=? AND p.status='active' ORDER BY r.created_at DESC");$s->execute([$u['id']]);Http::json(['data'=>$s->fetchAll()]);
+}
+if($path==='/api/provider/services'&&$method==='GET'){
+$u=Http::role('provider');$s=$db->prepare("SELECT s.* FROM provider_services s JOIN providers p ON p.id=s.provider_id WHERE p.user_id=? ORDER BY s.sort_order,s.id");$s->execute([$u['id']]);Http::json(['data'=>$s->fetchAll()]);
+}
+if($path==='/api/provider/services'&&$method==='POST'){
+$u=Http::role('provider');$name=trim((string)($body['name']??''));$desc=trim((string)($body['description']??''));$from=$body['price_from']??null;$to=$body['price_to']??null;$unit=(string)($body['price_unit']??'quote');$cat=isset($body['category_id'])?(int)$body['category_id']:null;
+if(strlen($name)<2||!in_array($unit,['fixed','hour','day','guest','package','quote'],true)||($from!==null&&$from!==''&&!is_numeric($from))||($to!==null&&$to!==''&&!is_numeric($to))||($from!==null&&$from!==''&&(float)$from<0)||($to!==null&&$to!==''&&(float)$to<0)||($from!==null&&$from!==''&&$to!==null&&$to!==''&&(float)$to<(float)$from))Http::json(['error'=>'Dados do serviço inválidos.'],422);
+$s=$db->prepare("SELECT id FROM providers WHERE user_id=? AND status='active'");$s->execute([$u['id']]);$pid=(int)$s->fetchColumn();if(!$pid)Http::json(['error'=>'Perfil de fornecedor indisponível.'],404);
+$s=$db->prepare('INSERT INTO provider_services(provider_id,category_id,name,description,price_from,price_to,price_unit) VALUES(?,?,?,?,?,?,?)');$s->execute([$pid,$cat?:null,$name,$desc?:null,($from===''?null:$from),($to===''?null:$to),$unit]);Http::json(['ok'=>true,'id'=>(int)$db->lastInsertId()],201);
+}
+if(preg_match('#^/api/provider/services/(\\d+)$#',$path,$m)&&in_array($method,['PATCH','DELETE'],true)){
+$u=Http::role('provider');$s=$db->prepare('SELECT s.id FROM provider_services s JOIN providers p ON p.id=s.provider_id WHERE s.id=? AND p.user_id=?');$s->execute([(int)$m[1],$u['id']]);if(!$s->fetch())Http::json(['error'=>'Serviço não encontrado.'],404);
+if($method==='DELETE'){$s=$db->prepare('DELETE FROM provider_services WHERE id=?');$s->execute([(int)$m[1]]);Http::json(['ok'=>true]);}
+$name=trim((string)($body['name']??''));$desc=trim((string)($body['description']??''));$from=$body['price_from']??null;$to=$body['price_to']??null;$unit=(string)($body['price_unit']??'quote');$active=(int)(bool)($body['active']??true);if(strlen($name)<2||!in_array($unit,['fixed','hour','day','guest','package','quote'],true)||($from!==null&&$from!==''&&!is_numeric($from))||($to!==null&&$to!==''&&!is_numeric($to)))Http::json(['error'=>'Dados do serviço inválidos.'],422);
+$s=$db->prepare('UPDATE provider_services SET name=?,description=?,price_from=?,price_to=?,price_unit=?,active=? WHERE id=?');$s->execute([$name,$desc?:null,($from===''?null:$from),($to===''?null:$to),$unit,$active,(int)$m[1]]);Http::json(['ok'=>true]);
+}
+if($path==='/api/provider/media'&&$method==='GET'){
+$u=Http::role('provider');$s=$db->prepare("SELECT m.* FROM provider_media m JOIN providers p ON p.id=m.provider_id WHERE p.user_id=? ORDER BY m.sort_order,m.id");$s->execute([$u['id']]);Http::json(['data'=>$s->fetchAll()]);
+}
+if($path==='/api/provider/media'&&$method==='POST'){
+$u=Http::role('provider');$url=trim((string)($body['media_url']??''));$type=(string)($body['media_type']??'image');$alt=trim((string)($body['alt_text']??''));if(!filter_var($url,FILTER_VALIDATE_URL)||!in_array($type,['image','video'],true))Http::json(['error'=>'Endereço ou tipo de ficheiro inválido.'],422);
+$s=$db->prepare("SELECT id FROM providers WHERE user_id=? AND status='active'");$s->execute([$u['id']]);$pid=(int)$s->fetchColumn();if(!$pid)Http::json(['error'=>'Perfil indisponível.'],404);
+$s=$db->prepare('INSERT INTO provider_media(provider_id,media_type,media_url,alt_text) VALUES(?,?,?,?)');$s->execute([$pid,$type,$url,$alt?:null]);Http::json(['ok'=>true,'id'=>(int)$db->lastInsertId()],201);
+}
+if(preg_match('#^/api/provider/media/(\\d+)$#',$path,$m)&&$method==='DELETE'){
+$u=Http::role('provider');$s=$db->prepare('DELETE m FROM provider_media m JOIN providers p ON p.id=m.provider_id WHERE m.id=? AND p.user_id=?');$s->execute([(int)$m[1],$u['id']]);if(!$s->rowCount())Http::json(['error'=>'Imagem não encontrada.'],404);Http::json(['ok'=>true]);
+}
+if(preg_match('#^/api/provider/requests/(\\d+)/messages$#',$path,$m)&&in_array($method,['GET','POST'],true)){
+$u=Http::role('provider');$s=$db->prepare("SELECT r.id FROM service_requests r JOIN providers p ON p.id=r.provider_id WHERE r.id=? AND p.user_id=? AND p.status='active'");$s->execute([(int)$m[1],$u['id']]);if(!$s->fetch())Http::json(['error'=>'Pedido não encontrado.'],404);
+if($method==='GET'){$s=$db->prepare("SELECT id,sender_role,message,created_at FROM request_messages WHERE request_id=? AND delivery_target='internal' ORDER BY created_at,id");$s->execute([(int)$m[1]]);Http::json(['data'=>$s->fetchAll()]);}
+$message=trim((string)($body['message']??''));if(strlen($message)<2||strlen($message)>5000)Http::json(['error'=>'A resposta deve ter entre 2 e 5000 caracteres.'],422);
+$db->beginTransaction();$s=$db->prepare("INSERT INTO request_messages(request_id,sender_user_id,sender_role,delivery_target,message) VALUES(?,?,'provider','internal',?)");$s->execute([(int)$m[1],$u['id'],$message]);$s=$db->prepare("UPDATE service_requests SET status='answered' WHERE id=? AND status IN ('submitted','forwarded')");$s->execute([(int)$m[1]]);$audit($db,(int)$u['id'],'provider_request_reply','service_request',(int)$m[1]);$db->commit();Http::json(['ok'=>true,'message'=>'Resposta enviada à equipa LIRANDZU para revisão e encaminhamento.'],201);
+}
+if(preg_match('#^/api/admin/requests/(\\d+)/messages$#',$path,$m)&&in_array($method,['GET','POST'],true)){
+$u=Http::role('admin');$rid=(int)$m[1];$s=$db->prepare('SELECT id FROM service_requests WHERE id=?');$s->execute([$rid]);if(!$s->fetch())Http::json(['error'=>'Pedido não encontrado.'],404);
+if($method==='GET'){$s=$db->prepare('SELECT id,sender_user_id,sender_role,delivery_target,message,created_at FROM request_messages WHERE request_id=? ORDER BY created_at,id');$s->execute([$rid]);Http::json(['data'=>$s->fetchAll()]);}
+$message=trim((string)($body['message']??''));$target=(string)($body['delivery_target']??'internal');if(strlen($message)<2||strlen($message)>5000||!in_array($target,['internal','customer','provider'],true))Http::json(['error'=>'Mensagem ou destinatário inválido.'],422);
+$db->beginTransaction();$s=$db->prepare("INSERT INTO request_messages(request_id,sender_user_id,sender_role,delivery_target,message) VALUES(?,?,'admin',?,?)");$s->execute([$rid,$u['id'],$target,$message]);$s=$db->prepare("UPDATE service_requests SET status='forwarded' WHERE id=? AND ?='provider' AND status IN ('submitted','answered')");$s->execute([$rid,$target]);$audit($db,(int)$u['id'],'admin_message_sent','service_request',$rid,['delivery_target'=>$target]);$db->commit();Http::json(['ok'=>true,'message'=>'Mensagem registada e encaminhada pela LIRANDZU.'],201);
+}
+if(preg_match('#^/api/admin/requests/(\\d+)/status$#',$path,$m)&&$method==='PATCH'){
+$u=Http::role('admin');$rid=(int)$m[1];$status=(string)($body['status']??'');$note=trim((string)($body['note']??''));if(!in_array($status,['submitted','forwarded','answered','closed','cancelled'],true))Http::json(['error'=>'Estado inválido.'],422);
+$db->beginTransaction();$s=$db->prepare('SELECT status FROM service_requests WHERE id=? FOR UPDATE');$s->execute([$rid]);$old=$s->fetchColumn();if($old===false){$db->rollBack();Http::json(['error'=>'Pedido não encontrado.'],404);}$s=$db->prepare('UPDATE service_requests SET status=?,closed_at=? WHERE id=?');$s->execute([$status,$status==='closed'?date('Y-m-d H:i:s'):null,$rid]);$s=$db->prepare('INSERT INTO request_status_history(request_id,old_status,new_status,changed_by,note) VALUES(?,?,?,?,?)');$s->execute([$rid,$old,$status,$u['id'],$note?:null]);$audit($db,(int)$u['id'],'request_status_changed','service_request',$rid,['from'=>$old,'to'=>$status]);$db->commit();Http::json(['ok'=>true]);
+}
+if(preg_match('#^/api/service-requests/([A-Z0-9-]+)/status$#',$path,$m)&&$method==='GET'){
+$ref=$m[1];$s=$db->prepare('SELECT r.reference_code,r.status,r.event_city,r.event_date,p.business_name FROM service_requests r JOIN providers p ON p.id=r.provider_id WHERE r.reference_code=? LIMIT 1');$s->execute([$ref]);$r=$s->fetch();if(!$r)Http::json(['error'=>'Pedido não encontrado.'],404);$s=$db->prepare("SELECT message,created_at FROM request_messages WHERE request_id=(SELECT id FROM service_requests WHERE reference_code=?) AND delivery_target='customer' ORDER BY created_at,id");$s->execute([$ref]);$r['messages']=$s->fetchAll();Http::json(['data'=>$r]);
 }
 Http::json(['error'=>'Rota não encontrada'],404);
 }catch(Throwable $e){if(isset($db)&&$db->inTransaction())$db->rollBack();error_log((string)$e);Http::json(['error'=>getenv('APP_DEBUG')==='true'?$e->getMessage():'Erro interno do servidor'],500);}
