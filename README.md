@@ -27,14 +27,18 @@ Não usar a palavra-passe de exemplo em produção.
 
 ## Portais e regras de negócio
 - **Cliente:** descobre fornecedores activos e submete pedidos à equipa LIRANDZU.
-- **Fornecedor:** candidata-se ou é registado pela administração; só é publicado após aprovação. Depois de aprovado, gere o próprio perfil, serviços, preços e galeria.
-- **Administração:** gere categorias, fornecedores, candidaturas, clientes, pedidos e comunicações.
+- **Fornecedor:** candidata-se ou é registado pela administração; só é publicado após aprovação. Depois de aprovado, gere o próprio perfil, múltiplas categorias, serviços, preços e galeria.
+- **Administração:** gere categorias, fornecedores, candidaturas, clientes, pedidos e comunicações; pode cadastrar fornecedores directamente, encaminhar mensagens para cada parte e actualizar o estado dos pedidos.
 - **Intermediação obrigatória:** as comunicações entre cliente e fornecedor são mediadas pela LIRANDZU. Não disponibilizar contactos directos nem canais privados entre as partes na aplicação.
 - Apenas fornecedores activos e aprovados podem aparecer no catálogo.
+- O cliente acompanha o pedido pela referência LIRANDZU e pode enviar mensagens à equipa; a equipa encaminha as respostas, sem expor contactos directos.
 - A negociação e o pagamento podem ser tratados fora da plataforma nesta fase; não existe processamento de pagamentos integrado no MVP.
 
 ## Segurança antes de produção
 Configurar HTTPS, domínio exacto em `FRONTEND_URL`, cookies Secure, backups, rate limiting no login e monitorização. Nunca publicar ficheiros `.env`. Registar acções administrativas e limitar o acesso aos dados pessoais dos clientes à equipa autorizada.
 
 ## Estado
-Implementação em evolução. A migração 001 amplia a estrutura relacional para clientes, múltiplas categorias, serviços, galeria, histórico de pedidos, notificações e auditoria. A API e os três portais ainda precisam de integração completa com essas estruturas. Antes de produção, executar build Angular, testes PHP, testes integrados MySQL/MariaDB e revisão de privacidade/segurança.
+Implementação em evolução. A migração 001 amplia a estrutura relacional para clientes, múltiplas categorias, serviços, galeria, histórico de pedidos, notificações e auditoria. A API e os três portais já incluem operações iniciais para gerir serviços/galeria, responder e encaminhar mensagens, acompanhar pedidos e registar fornecedores pela administração. A integração ainda requer validação funcional e revisão de segurança. Antes de produção, executar build Angular, testes PHP, testes integrados MySQL/MariaDB e revisão de privacidade/segurança.
+
+## Testes de integração
+O workflow GitHub Actions executa build Angular, lint PHP, smoke tests e uma tarefa MySQL 8 que aplica `database/schema.sql` e `database/migrations/001_expand_intermediation_model.sql`, validando as tabelas e colunas essenciais.
