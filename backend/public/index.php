@@ -66,7 +66,7 @@ if($date!==''&&!preg_match('/^\\d{4}-\\d{2}-\\d{2}$/',$date))Http::json(['error'
 $s=$db->prepare("SELECT id FROM providers WHERE id=? AND status='active'");$s->execute([$provider]);if(!$s->fetch())Http::json(['error'=>'Este fornecedor não está disponível'],404);
 $ref='LIR-'.strtoupper(bin2hex(random_bytes(8)));
 $s=$db->prepare('INSERT INTO service_requests(reference_code,provider_id,customer_name,customer_email,customer_phone,event_date,event_city,budget,message) VALUES(?,?,?,?,?,?,?,?,?)');
-$s->execute([$ref,$provider,$name,$email?:null,$phone,$date?:null,$city,($budget!==''&&$budget!==null)?(float)$budget:null,$message]);
+$s->execute([$ref,$provider,$name,$email?:null,$phone,$date?:null,$city,($budget!==''&&$budget!==null)?(float)$budget:null,$message]);$requestId=(int)$db->lastInsertId();$h=$db->prepare("INSERT INTO request_status_history(request_id,old_status,new_status,note) VALUES(?,NULL,'forwarded','Pedido submetido pelo cliente através do catálogo público')");$h->execute([$requestId]);
 Http::json(['ok'=>true,'reference_code'=>$ref,'message'=>'Pedido enviado à equipa LIRANDZU. Acompanharemos o encaminhamento ao fornecedor.'],201);
 }
 if($path==='/api/admin/summary'&&$method==='GET'){
@@ -78,13 +78,13 @@ Http::role('admin');$status=(string)($_GET['status']??'pending');if(!in_array($s
 if(preg_match('#^/api/admin/applications/(\\d+)/decision$#',$path,$m)&&$method==='POST'){
 Http::role('admin');$id=(int)$m[1];$decision=$body['decision']??'';$notes=trim((string)($body['admin_notes']??''));if(!in_array($decision,['approved','rejected'],true))Http::json(['error'=>'Decisão inválida'],422);
 $db->beginTransaction();$s=$db->prepare("SELECT * FROM provider_applications WHERE id=? AND status='pending' FOR UPDATE");$s->execute([$id]);$a=$s->fetch();if(!$a){$db->rollBack();Http::json(['error'=>'Candidatura não encontrada ou já analisada'],404);}
-$s=$db->prepare('UPDATE provider_applications SET status=?,admin_notes=?,reviewed_at=NOW() WHERE id=?');$s->execute([$decision,$notes?:null,$id]);$temporaryPassword=null;
+$s=$db->prepare('UPDATE provider_applications SET status=?,admin_notes=?,reviewed_at=NOW(),reviewed_by=? WHERE id=?');$s->execute([$decision,$notes?:null,$u['id'],$id]);$temporaryPassword=null;
 if($decision==='approved'){
 $s=$db->prepare('SELECT id FROM users WHERE email=?');$s->execute([$a['email']]);$userId=$s->fetchColumn();
 if($userId){$db->rollBack();Http::json(['error'=>'Já existe uma conta com este e-mail. Verifique os registos antes de aprovar.'],409);}
 if(!$userId){$temporaryPassword=bin2hex(random_bytes(6));$s=$db->prepare("INSERT INTO users(name,email,phone,password_hash,role,status) VALUES(?,?,?,?, 'provider','active')");$s->execute([$a['applicant_name'],$a['email'],$a['phone'],password_hash($temporaryPassword,PASSWORD_DEFAULT)]);$userId=(int)$db->lastInsertId();}
 $slug=strtolower(trim(preg_replace('/[^a-z0-9]+/i','-',iconv('UTF-8','ASCII//TRANSLIT',$a['business_name'])?:$a['business_name']),'-')).'-'.substr(bin2hex(random_bytes(3)),0,6);
-$s=$db->prepare("INSERT INTO providers(user_id,category_id,business_name,slug,city,description,status) VALUES(?,?,?,?,?,?,'active')");$s->execute([$userId,$a['category_id'],$a['business_name'],$slug,$a['city'],$a['description']]);
+$s=$db->prepare("INSERT INTO providers(user_id,category_id,business_name,slug,city,description,status) VALUES(?,?,?,?,?,?,'active')");$s->execute([$userId,$a['category_id'],$a['business_name'],$slug,$a['city'],$a['description']]);$providerId=(int)$db->lastInsertId();$s=$db->prepare('INSERT INTO provider_categories(provider_id,category_id,is_primary) VALUES(?,?,1)');$s->execute([$providerId,$a['category_id']]);$audit($db,(int)$u['id'],'provider_application_approved','provider',$providerId,['application_id'=>$id]);
 }
 $db->commit();Http::json(['ok'=>true,'message'=>$decision==='approved'?'Fornecedor aprovado e publicado.':'Candidatura rejeitada.','temporary_password'=>$temporaryPassword]);
 }
