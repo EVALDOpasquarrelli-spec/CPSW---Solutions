@@ -3,38 +3,38 @@
 Plataforma de descoberta e intermediação de fornecedores para casamentos em Moçambique.
 
 ## Tecnologias
-- Angular 20 + TypeScript em frontend/
-- PHP 8.2+ + PDO em backend/
-- MySQL 8 / MariaDB em database/schema.sql
+- Angular 20 + TypeScript em `frontend/`
+- PHP 8.2+ + PDO em `backend/`
+- MySQL 8 / MariaDB em `database/`
 
 ## Instalação local
-1. Executar database/schema.sql no MySQL/MariaDB.
-2. Copiar backend/.env.example para backend/.env e preencher as credenciais.
-3. Na pasta backend: composer install.
-4. Iniciar a API: php -S 127.0.0.1:8080 -t public.
-5. Na pasta frontend: npm install e npm start.
-6. Abrir http://localhost:4200. O proxy Angular encaminha /api para 127.0.0.1:8080.
+1. Executar `database/schema.sql` no MySQL/MariaDB.
+2. Executar, pela ordem, as migrações existentes em `database/migrations/` (actualmente `001_expand_intermediation_model.sql`).
+3. Copiar `backend/.env.example` para `backend/.env` e preencher as credenciais.
+4. Na pasta `backend`: `composer install`.
+5. Iniciar a API: `php -S 127.0.0.1:8080 -t public`.
+6. Na pasta `frontend`: `npm install` e `npm start`.
+7. Abrir `http://localhost:4200`. O proxy Angular encaminha `/api` para `127.0.0.1:8080`.
 
 ## Criar o primeiro administrador
-No terminal do servidor, dentro de backend/, executar:
+No terminal do servidor, dentro de `backend/`, executar:
 
-    php bin/create-admin.php "Administrador LIRANDZU" admin@seudominio.mz "UmaSenha-Forte-com-12"
+```bash
+php bin/create-admin.php "Administrador LIRANDZU" admin@seudominio.mz "UmaSenha-Forte-com-12"
+```
 
 Não usar a palavra-passe de exemplo em produção.
 
-## Funcionalidades nesta versão
-- Catálogo público com pesquisa por nome/descrição, cidade e categoria.
-- Pedido de contacto por fornecedor, com referência de acompanhamento.
-- Candidaturas públicas de fornecedores, sujeitas à aprovação.
-- Painel administrativo: indicadores, aprovação/rejeição, verificação, destaque, suspensão e consulta de pedidos.
-- Área do fornecedor: edição do próprio perfil e consulta dos pedidos recebidos.
-- Sessões PHP, passwords com hash seguro, prepared statements e controlo de funções no servidor.
-
-## Modelo de intermediação
-A LIRANDZU recebe os pedidos dos clientes e faz o encaminhamento aos fornecedores. A negociação e o pagamento são combinados directamente entre cliente e fornecedor fora da plataforma nesta primeira versão. Não existem pagamentos internos, contratos ou planeamento integral do casamento.
+## Portais e regras de negócio
+- **Cliente:** descobre fornecedores activos e submete pedidos à equipa LIRANDZU.
+- **Fornecedor:** candidata-se ou é registado pela administração; só é publicado após aprovação. Depois de aprovado, gere o próprio perfil, serviços, preços e galeria.
+- **Administração:** gere categorias, fornecedores, candidaturas, clientes, pedidos e comunicações.
+- **Intermediação obrigatória:** as comunicações entre cliente e fornecedor são mediadas pela LIRANDZU. Não disponibilizar contactos directos nem canais privados entre as partes na aplicação.
+- Apenas fornecedores activos e aprovados podem aparecer no catálogo.
+- A negociação e o pagamento podem ser tratados fora da plataforma nesta fase; não existe processamento de pagamentos integrado no MVP.
 
 ## Segurança antes de produção
-Configurar HTTPS, domínio exacto em FRONTEND_URL, cookies Secure, backups, rate limiting no login e monitorização. A palavra-passe temporária criada ao aprovar um fornecedor é apresentada ao administrador uma única vez; deve ser entregue por canal seguro e alterada pelo fornecedor. Nunca publicar ficheiros .env.
+Configurar HTTPS, domínio exacto em `FRONTEND_URL`, cookies Secure, backups, rate limiting no login e monitorização. Nunca publicar ficheiros `.env`. Registar acções administrativas e limitar o acesso aos dados pessoais dos clientes à equipa autorizada.
 
 ## Estado
-Implementação funcional em desenvolvimento. Antes de produção, executar build Angular, smoke tests PHP e testes integrados com uma base de dados de teste. Rever a política de privacidade e consentimento para tratamento dos contactos dos clientes.
+Implementação em evolução. A migração 001 amplia a estrutura relacional para clientes, múltiplas categorias, serviços, galeria, histórico de pedidos, notificações e auditoria. A API e os três portais ainda precisam de integração completa com essas estruturas. Antes de produção, executar build Angular, testes PHP, testes integrados MySQL/MariaDB e revisão de privacidade/segurança.
