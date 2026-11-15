@@ -1,0 +1,70 @@
+name: LIRANDZU CI
+on:
+  push:
+    branches: [main, "feat/**"]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+jobs:
+  frontend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm install
+        working-directory: frontend
+      - run: npm run build
+        working-directory: frontend
+  backend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.2'
+          extensions: pdo, pdo_mysql
+          tools: composer:v2
+      - run: find . -name '*.php' -print0 | xargs -0 -n1 php -l
+        working-directory: backend
+      - run: composer install --no-interaction --prefer-dist
+        working-directory: backend
+      - run: composer test
+        working-directory: backend
+
+  database:
+    runs-on: ubuntu-latest
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: lirandzu_ci
+          MYSQL_DATABASE: lirandzu
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -uroot -plirandzu_ci"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.2'
+          extensions: pdo, pdo_mysql
+      - name: Apply base schema
+        run: mysql -h 127.0.0.1 -uroot -plirandzu_ci lirandzu < database/schema.sql
+      - name: Apply LIRANDZU migrations
+        run: mysql -h 127.0.0.1 -uroot -plirandzu_ci lirandzu < database/migrations/001_expand_intermediation_model.sql
+      - name: Apply authentication security migration
+        run: mysql -h 127.0.0.1 -uroot -plirandzu_ci lirandzu < database/migrations/002_auth_rate_limits.sql
+      - name: Verify database structure
+        env:
+          DB_HOST: 127.0.0.1
+          DB_PORT: 3306
+          DB_NAME: lirandzu
+          DB_USER: root
+          DB_PASS: lirandzu_ci
+        run: php backend/tests/database.php

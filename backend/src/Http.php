@@ -1,0 +1,3 @@
+<?php
+declare(strict_types=1); namespace App;
+final class Http { public static function json(mixed $v,int $s=200):never{http_response_code($s);header('Content-Type: application/json; charset=utf-8');echo json_encode($v,JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES);exit;} public static function body():array{$v=json_decode(file_get_contents('php://input')?:'{}',true);if(!is_array($v))self::json(['error'=>'JSON inválido'],400);return $v;} public static function user():array{if(empty($_SESSION['user']))self::json(['error'=>'Autenticação necessária'],401);return $_SESSION['user'];} public static function role(string ...$roles):array{$u=self::user();if(!in_array($u['role'],$roles,true))self::json(['error'=>'Sem permissão'],403);return $u;} }

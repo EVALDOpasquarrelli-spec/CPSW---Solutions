@@ -1,0 +1,59 @@
+services:
+  db:
+    image: mysql:8.0
+    restart: unless-stopped
+    environment:
+      MYSQL_DATABASE: lirandzu
+      MYSQL_USER: lirandzu
+      MYSQL_PASSWORD: lirandzu_local
+      MYSQL_ROOT_PASSWORD: root_lirandzu_local
+    ports:
+      - "3307:3306"
+    volumes:
+      - lirandzu_db:/var/lib/mysql
+      - ./database/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
+      - ./database/migrations/001_expand_intermediation_model.sql:/docker-entrypoint-initdb.d/02-migration.sql:ro
+      - ./database/migrations/002_auth_rate_limits.sql:/docker-entrypoint-initdb.d/03-auth-rate-limits.sql:ro
+    healthcheck:
+      test: ["CMD","mysqladmin","ping","-h","127.0.0.1","-uroot","-proot_lirandzu_local"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    environment:
+      APP_ENV: local
+      APP_DEBUG: "true"
+      FRONTEND_URL: http://localhost:4200
+      DB_HOST: db
+      DB_PORT: 3306
+      DB_NAME: lirandzu
+      DB_USER: lirandzu
+      DB_PASS: lirandzu_local
+      SESSION_NAME: lirandzu_session
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - "8080:8080"
+
+  frontend:
+    image: node:22-alpine
+    working_dir: /app
+    restart: unless-stopped
+    volumes:
+      - ./frontend:/app
+      - lirandzu_node_modules:/app/node_modules
+    command: sh -c "npm install && npm start -- --host 0.0.0.0 --proxy-config proxy.docker.conf.json"
+    depends_on:
+      - backend
+    ports:
+      - "4200:4200"
+
+volumes:
+  lirandzu_db:
+  lirandzu_node_modules:
