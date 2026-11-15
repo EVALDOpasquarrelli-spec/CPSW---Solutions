@@ -9,4 +9,4 @@ WORKDIR /var/www/html
 COPY --from=vendor /app/vendor ./vendor
 COPY . .
 EXPOSE 8080
-CMD ["php","-S","0.0.0.0:8080","-t","public"]
+CMD ["php","-S","0.0.0.0:8080","-t","public","public/router.php"]

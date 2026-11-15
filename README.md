@@ -102,7 +102,7 @@ SOURCE database/migrations/002_auth_rate_limits.sql;
 cd backend
 cp .env.example .env
 composer install
-php -S 127.0.0.1:8080 -t public
+php -S 127.0.0.1:8080 -t public public/router.php
 ```
 
 Edite `backend/.env` com as credenciais da sua base de dados.
