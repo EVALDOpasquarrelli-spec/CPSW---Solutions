@@ -143,6 +143,11 @@ Http::role('admin');$s=$db->query('SELECT p.id,p.business_name,p.slug,p.city,p.s
 if(preg_match('#^/api/admin/providers/(\\d+)$#',$path,$m)&&$method==='PATCH'){
 Http::role('admin');$id=(int)$m[1];$status=$body['status']??null;$featured=$body['featured']??null;$verified=$body['verified']??null;if($status!==null&&!in_array($status,['active','suspended','rejected'],true))Http::json(['error'=>'Estado inválido'],422);$s=$db->prepare('UPDATE providers SET status=COALESCE(?,status),featured=COALESCE(?,featured),verified=COALESCE(?,verified) WHERE id=?');$s->execute([$status,$featured===null?null:(int)(bool)$featured,$verified===null?null:(int)(bool)$verified,$id]);Http::json(['ok'=>true]);
 }
+if($path==='/api/admin/customers'&&$method==='GET'){
+Http::role('admin');
+$s=$db->query("SELECT customer_name,customer_email,customer_phone,COUNT(*) AS requests_count,MAX(created_at) AS last_request_at FROM service_requests GROUP BY customer_name,customer_email,customer_phone ORDER BY last_request_at DESC LIMIT 300");
+Http::json(['data'=>$s->fetchAll()]);
+}
 if($path==='/api/admin/requests'&&$method==='GET'){
 Http::role('admin');$where=[];$params=[];$status=trim((string)($_GET['status']??''));$city=trim((string)($_GET['city']??''));$term=trim((string)($_GET['q']??''));$provider=(int)($_GET['provider_id']??0);
 if($status!==''&&in_array($status,['submitted','forwarded','answered','closed','cancelled'],true)){$where[]='r.status=?';$params[]=$status;}
