@@ -50,3 +50,19 @@ O workflow GitHub Actions executa build Angular, lint PHP, smoke tests e uma tar
 - O acesso de fornecedores inclui edição de serviços existentes.
 - O catálogo abre páginas públicas individuais com categorias, serviços, portfólio e pedido de contacto mediado.
 - A autenticação limita tentativas falhadas por combinação de e-mail e endereço IP: após oito falhas dentro da janela de 15 minutos, bloqueia novas tentativas durante 15 minutos. A tabela é criada pela migração `002_auth_rate_limits.sql`.
+
+
+### Novas funcionalidades e segurança
+- Perfis públicos individuais de fornecedores com portfólio, serviços e pedido de contacto mediado.
+- Gestão administrativa de categorias e filtros avançados de pedidos.
+- Histórico de transições de estado dos pedidos visível no painel.
+- Caixa de notificações para administradores e fornecedores.
+- Protecção CSRF por token de sessão nas operações autenticadas.
+- Limitação de tentativas falhadas de login (migração `002_auth_rate_limits.sql`).
+
+Para instalar/actualizar a base de dados, executar pela ordem:
+1. `database/schema.sql`
+2. `database/migrations/001_expand_intermediation_model.sql`
+3. `database/migrations/002_auth_rate_limits.sql`
+
+As notificações internas são apresentadas nos painéis; envio de e-mail/SMS e armazenamento binário de imagens ainda exigem configuração e desenvolvimento próprios.
