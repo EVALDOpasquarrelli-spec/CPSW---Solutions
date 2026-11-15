@@ -58,6 +58,8 @@ jobs:
         run: mysql -h 127.0.0.1 -uroot -plirandzu_ci lirandzu < database/schema.sql
       - name: Apply LIRANDZU migrations
         run: mysql -h 127.0.0.1 -uroot -plirandzu_ci lirandzu < database/migrations/001_expand_intermediation_model.sql
+      - name: Apply authentication security migration
+        run: mysql -h 127.0.0.1 -uroot -plirandzu_ci lirandzu < database/migrations/002_auth_rate_limits.sql
       - name: Verify database structure
         env:
           DB_HOST: 127.0.0.1
