@@ -17,7 +17,7 @@ final class Auth {
    Http::json(['error'=>'E-mail ou palavra-passe incorrectos'],401);
   }
   $this->db->prepare('DELETE FROM auth_rate_limits WHERE bucket_key=?')->execute([$key]);
-  session_regenerate_id(true);$touch=$this->db->prepare('UPDATE users SET last_login_at=NOW() WHERE id=?');$touch->execute([(int)$u['id']]);unset($u['password_hash']);$_SESSION['user']=$u;Http::json(['user'=>$u]);
+  session_regenerate_id(true);$touch=$this->db->prepare('UPDATE users SET last_login_at=NOW() WHERE id=?');$touch->execute([(int)$u['id']]);unset($u['password_hash']);$_SESSION['user']=$u;$_SESSION['csrf_token']??=bin2hex(random_bytes(32));Http::json(['user'=>$u,'csrf_token'=>$_SESSION['csrf_token']]);
  }
  public function logout():never {$_SESSION=[];session_destroy();Http::json(['ok'=>true]);}
 }
