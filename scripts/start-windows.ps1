@@ -7,7 +7,7 @@ if (-not (Test-Path (Join-Path $Backend '.env'))) { throw 'Falta backend/.env. E
 if (-not (Test-Path (Join-Path $Backend 'vendor/autoload.php'))) { throw 'Faltam dependências PHP. Execute scripts/setup-windows.ps1.' }
 if (-not (Test-Path (Join-Path $Frontend 'node_modules'))) { throw 'Faltam dependências Angular. Execute scripts/setup-windows.ps1.' }
 
-Start-Process -FilePath 'powershell.exe' -WorkingDirectory $Backend -ArgumentList @('-NoExit','-Command','php -S 127.0.0.1:8080 -t public router.php')
+Start-Process -FilePath 'powershell.exe' -WorkingDirectory $Backend -ArgumentList @('-NoExit','-Command','php -S 127.0.0.1:8080 -t public public/router.php')
 Start-Process -FilePath 'powershell.exe' -WorkingDirectory $Frontend -ArgumentList @('-NoExit','-Command','npm start')
 
 Write-Host 'Servidores iniciados em terminais separados.' -ForegroundColor Green
