@@ -42,3 +42,11 @@ Implementação em evolução. A migração 001 amplia a estrutura relacional pa
 
 ## Testes de integração
 O workflow GitHub Actions executa build Angular, lint PHP, smoke tests e uma tarefa MySQL 8 que aplica `database/schema.sql` e `database/migrations/001_expand_intermediation_model.sql`, validando as tabelas e colunas essenciais.
+
+
+### Segurança e gestão operacional (actualização)
+- A administração pode gerir categorias (criar, editar, ordenar e activar/desactivar) sem apagar referências históricas.
+- A lista de pedidos administrativos aceita filtros por estado, cidade, referência, cliente ou fornecedor.
+- O acesso de fornecedores inclui edição de serviços existentes.
+- O catálogo abre páginas públicas individuais com categorias, serviços, portfólio e pedido de contacto mediado.
+- A autenticação limita tentativas falhadas por combinação de e-mail e endereço IP: após oito falhas dentro da janela de 15 minutos, bloqueia novas tentativas durante 15 minutos. A tabela é criada pela migração `002_auth_rate_limits.sql`.
