@@ -10,18 +10,20 @@ $origin=getenv('FRONTEND_URL')?:'http://localhost:4200';
 header('Access-Control-Allow-Origin: '.$origin);
 header('Vary: Origin');
 header('Access-Control-Allow-Credentials: true');
-header('Access-Control-Allow-Headers: Content-Type, X-Requested-With');
+header('Access-Control-Allow-Headers: Content-Type, X-Requested-With, X-CSRF-Token');
 header('Access-Control-Allow-Methods: GET, POST, PATCH, OPTIONS');
 header('Content-Type: application/json; charset=utf-8');
 if($_SERVER['REQUEST_METHOD']==='OPTIONS'){http_response_code(204);exit;}
 session_name(getenv('SESSION_NAME')?:'lirandzu_session');
 session_set_cookie_params(['httponly'=>true,'secure'=>!empty($_SERVER['HTTPS']),'samesite'=>'Lax','path'=>'/']);
 session_start();
+$_SESSION['csrf_token']??=bin2hex(random_bytes(32));
 
 try{
 $db=Database::connection();
 $path=rtrim(parse_url($_SERVER['REQUEST_URI'],PHP_URL_PATH)?:'/','/')?:'/';
 $method=$_SERVER['REQUEST_METHOD'];
+if(in_array($method,['POST','PATCH','PUT','DELETE'],true)&&isset($_SESSION['user'])&&$path!=='/api/auth/login'){$provided=(string)($_SERVER['HTTP_X_CSRF_TOKEN']??'');if(!hash_equals((string)$_SESSION['csrf_token'],$provided))Http::json(['error'=>'Token de segurança inválido. Actualize a página e tente novamente.'],419);}
 $body=in_array($method,['POST','PATCH'],true)?Http::body():[];
 $auth=new Auth($db);
 $audit=static function(PDO $db,?int $actor,string $action,string $type,?int $entity,array $details=[]):void{
@@ -35,6 +37,7 @@ $notifyUser=static function(PDO $db,int $userId,string $title,string $body,strin
  $i=$db->prepare('INSERT INTO notifications(user_id,title,body,type,resource_type,resource_id) VALUES(?,?,?,?,?,?)');$i->execute([$userId,$title,$body,$type,$resourceType,$resourceId]);
 };
 if($path==='/api/health')Http::json(['ok'=>true,'service'=>'lirandzu-api']);
+if($path==='/api/auth/csrf'&&$method==='GET')Http::json(['token'=>$_SESSION['csrf_token']]);
 if($path==='/api/auth/login'&&$method==='POST')$auth->login($body);
 if($path==='/api/auth/logout'&&$method==='POST')$auth->logout();
 if($path==='/api/auth/me'&&$method==='GET')Http::json(['user'=>Http::user()]);
