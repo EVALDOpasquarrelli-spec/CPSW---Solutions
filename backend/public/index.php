@@ -11,7 +11,7 @@ header('Access-Control-Allow-Origin: '.$origin);
 header('Vary: Origin');
 header('Access-Control-Allow-Credentials: true');
 header('Access-Control-Allow-Headers: Content-Type, X-Requested-With, X-CSRF-Token');
-header('Access-Control-Allow-Methods: GET, POST, PATCH, OPTIONS');
+header('Access-Control-Allow-Methods: GET, POST, PUT, PATCH, DELETE, OPTIONS');
 header('Content-Type: application/json; charset=utf-8');
 if($_SERVER['REQUEST_METHOD']==='OPTIONS'){http_response_code(204);exit;}
 session_name(getenv('SESSION_NAME')?:'lirandzu_session');
@@ -24,7 +24,7 @@ $db=Database::connection();
 $path=rtrim(parse_url($_SERVER['REQUEST_URI'],PHP_URL_PATH)?:'/','/')?:'/';
 $method=$_SERVER['REQUEST_METHOD'];
 if(in_array($method,['POST','PATCH','PUT','DELETE'],true)&&isset($_SESSION['user'])&&$path!=='/api/auth/login'){$provided=(string)($_SERVER['HTTP_X_CSRF_TOKEN']??'');if(!hash_equals((string)$_SESSION['csrf_token'],$provided))Http::json(['error'=>'Token de segurança inválido. Actualize a página e tente novamente.'],419);}
-$body=in_array($method,['POST','PATCH'],true)?Http::body():[];
+$body=in_array($method,['POST','PUT','PATCH'],true)?Http::body():[];
 $auth=new Auth($db);
 $audit=static function(PDO $db,?int $actor,string $action,string $type,?int $entity,array $details=[]):void{
  $s=$db->prepare('INSERT INTO audit_logs(actor_user_id,action,entity_type,entity_id,details,ip_address) VALUES(?,?,?,?,?,?)');
