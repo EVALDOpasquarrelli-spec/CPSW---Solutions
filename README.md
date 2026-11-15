@@ -63,6 +63,23 @@ Para parar: `docker compose down`.
 
 Para apagar também a base de dados local e começar de novo (ATENÇÃO: elimina os dados do volume): `docker compose down -v`.
 
+## Instalação no Windows sem Docker
+
+Com PHP 8.2+ (incluindo a extensão pdo_mysql), Composer 2, Node.js 22+ e MySQL instalados:
+
+```powershell
+Set-ExecutionPolicy -Scope Process Bypass
+./scripts/setup-windows.ps1
+```
+
+Crie a base de dados e aplique os três scripts SQL da secção seguinte. Depois ajuste `backend/.env` e execute:
+
+```powershell
+./scripts/start-windows.ps1
+```
+
+O script abre o backend e o frontend em janelas PowerShell separadas.
+
 ## Executar sem Docker
 
 ### Requisitos
