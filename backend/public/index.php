@@ -33,6 +33,22 @@ if($path==='/api/auth/login'&&$method==='POST')$auth->login($body);
 if($path==='/api/auth/logout'&&$method==='POST')$auth->logout();
 if($path==='/api/auth/me'&&$method==='GET')Http::json(['user'=>Http::user()]);
 if($path==='/api/categories'&&$method==='GET')Http::json(['data'=>$db->query('SELECT id,name,slug,description FROM categories WHERE active=1 ORDER BY sort_order,name')->fetchAll()]);
+if($path==='/api/admin/categories'&&$method==='GET'){
+Http::role('admin');Http::json(['data'=>$db->query('SELECT id,name,slug,description,active,sort_order FROM categories ORDER BY sort_order,name')->fetchAll()]);
+}
+if($path==='/api/admin/categories'&&$method==='POST'){
+$u=Http::role('admin');$name=trim((string)($body['name']??''));$description=trim((string)($body['description']??''));$sort=(int)($body['sort_order']??0);
+if(strlen($name)<2||strlen($name)>100||strlen($description)>500)Http::json(['error'=>'Indique um nome de categoria válido (2 a 100 caracteres).'],422);
+$base=strtolower(trim(preg_replace('/[^a-z0-9]+/i','-',iconv('UTF-8','ASCII//TRANSLIT',$name)?:$name),'-'));$slug=$base?:'categoria';$check=$db->prepare('SELECT id FROM categories WHERE slug=?');$check->execute([$slug]);if($check->fetch())$slug.='-'.substr(bin2hex(random_bytes(3)),0,6);
+$s=$db->prepare('INSERT INTO categories(name,slug,description,sort_order,active) VALUES(?,?,?,?,1)');$s->execute([$name,$slug,$description?:null,$sort]);$id=(int)$db->lastInsertId();$audit($db,(int)$u['id'],'category_created','category',$id,['slug'=>$slug]);Http::json(['ok'=>true,'id'=>$id,'slug'=>$slug],201);
+}
+if(preg_match('#^/api/admin/categories/(\\d+)$#',$path,$m)&&$method==='PATCH'){
+$u=Http::role('admin');$id=(int)$m[1];$s=$db->prepare('SELECT id FROM categories WHERE id=?');$s->execute([$id]);if(!$s->fetch())Http::json(['error'=>'Categoria não encontrada.'],404);
+$name=trim((string)($body['name']??''));$description=trim((string)($body['description']??''));$active=(int)(bool)($body['active']??true);$sort=(int)($body['sort_order']??0);
+if(strlen($name)<2||strlen($name)>100||strlen($description)>500)Http::json(['error'=>'Dados da categoria inválidos.'],422);
+$s=$db->prepare('UPDATE categories SET name=?,description=?,active=?,sort_order=? WHERE id=?');$s->execute([$name,$description?:null,$active,$sort,$id]);$audit($db,(int)$u['id'],'category_updated','category',$id,['active'=>$active]);Http::json(['ok'=>true]);
+}
+
 if($path==='/api/auth/change-password'&&$method==='POST'){
 $u=Http::user();$current=(string)($body['current_password']??'');$next=(string)($body['new_password']??'');
 if(strlen($next)<12)Http::json(['error'=>'A nova palavra-passe deve ter pelo menos 12 caracteres.'],422);
@@ -113,8 +129,14 @@ if(preg_match('#^/api/admin/providers/(\\d+)$#',$path,$m)&&$method==='PATCH'){
 Http::role('admin');$id=(int)$m[1];$status=$body['status']??null;$featured=$body['featured']??null;$verified=$body['verified']??null;if($status!==null&&!in_array($status,['active','suspended','rejected'],true))Http::json(['error'=>'Estado inválido'],422);$s=$db->prepare('UPDATE providers SET status=COALESCE(?,status),featured=COALESCE(?,featured),verified=COALESCE(?,verified) WHERE id=?');$s->execute([$status,$featured===null?null:(int)(bool)$featured,$verified===null?null:(int)(bool)$verified,$id]);Http::json(['ok'=>true]);
 }
 if($path==='/api/admin/requests'&&$method==='GET'){
-Http::role('admin');$s=$db->query('SELECT r.*,p.business_name FROM service_requests r JOIN providers p ON p.id=r.provider_id ORDER BY r.created_at DESC LIMIT 250');Http::json(['data'=>$s->fetchAll()]);
+Http::role('admin');$where=[];$params=[];$status=trim((string)($_GET['status']??''));$city=trim((string)($_GET['city']??''));$term=trim((string)($_GET['q']??''));$provider=(int)($_GET['provider_id']??0);
+if($status!==''&&in_array($status,['submitted','forwarded','answered','closed','cancelled'],true)){$where[]='r.status=?';$params[]=$status;}
+if($city!==''){$where[]='r.event_city LIKE ?';$params[]='%'.$city.'%';}
+if($provider>0){$where[]='r.provider_id=?';$params[]=$provider;}
+if($term!==''){$where[]='(r.reference_code LIKE ? OR r.customer_name LIKE ? OR p.business_name LIKE ?)';$params[]='%'.$term.'%';$params[]='%'.$term.'%';$params[]='%'.$term.'%';}
+$sql='SELECT r.*,p.business_name FROM service_requests r JOIN providers p ON p.id=r.provider_id'.($where?' WHERE '.implode(' AND ',$where):'').' ORDER BY r.created_at DESC LIMIT 250';$s=$db->prepare($sql);$s->execute($params);Http::json(['data'=>$s->fetchAll()]);
 }
+
 if($path==='/api/provider/profile'&&$method==='GET'){
 $u=Http::role('provider');$s=$db->prepare("SELECT p.id,p.business_name,p.city,p.province,p.district,p.address,p.contact_email,p.contact_phone,p.whatsapp_phone,p.website_url,p.instagram_url,p.facebook_url,p.description,p.indicative_price,p.cover_image,c.name category FROM providers p JOIN categories c ON c.id=p.category_id WHERE p.user_id=? AND p.status='active' LIMIT 1");$s->execute([$u['id']]);Http::json(['data'=>$s->fetch()?:null]);
 }
