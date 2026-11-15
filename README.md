@@ -1,68 +1,147 @@
 # LIRANDZU — LC CONSULTORIA
 
-Plataforma de descoberta e intermediação de fornecedores para casamentos em Moçambique.
+Plataforma digital de descoberta e intermediação de fornecedores para casamentos em Moçambique.
+
+A LIRANDZU aproxima clientes e profissionais de casamentos, mantendo a LC CONSULTORIA como intermediária das comunicações e do encaminhamento dos pedidos.
+
+## Funcionalidades
+
+### Portal público e clientes
+- Catálogo de fornecedores activos e aprovados.
+- Pesquisa por texto, categoria e cidade.
+- Perfis públicos com serviços, preços indicativos e portfólio.
+- Favoritos guardados no navegador.
+- Comparação de até três fornecedores.
+- Pedido de contacto encaminhado à equipa LIRANDZU.
+- Consulta do estado do pedido por referência e envio de mensagens à equipa.
+
+### Portal de fornecedores
+- Candidatura pública sujeita a aprovação administrativa.
+- Registo directo pela administração.
+- Gestão do perfil comercial e das categorias.
+- Gestão de serviços, preços e galeria através de URLs de imagens/vídeos.
+- Caixa de notificações.
+- Consulta de pedidos encaminhados e resposta privada à equipa LIRANDZU.
+- Alteração da palavra-passe.
+
+### Painel administrativo
+- Indicadores de operação.
+- Aprovação/rejeição de candidaturas.
+- Registo, activação, suspensão, verificação e destaque de fornecedores.
+- Gestão de categorias.
+- Pesquisa e filtragem de pedidos.
+- Encaminhamento de mensagens para cliente ou fornecedor.
+- Histórico de estados, notificações e auditoria.
 
 ## Tecnologias
-- Angular 20 + TypeScript em `frontend/`
-- PHP 8.2+ + PDO em `backend/`
-- MySQL 8 / MariaDB em `database/`
+- Angular 20 + TypeScript
+- PHP 8.2+ + PDO
+- MySQL 8 / MariaDB
+- API REST
+- GitHub Actions para build e testes
 
-## Instalação local
-1. Executar `database/schema.sql` no MySQL/MariaDB.
-2. Executar, pela ordem, as migrações existentes em `database/migrations/` (actualmente `001_expand_intermediation_model.sql`).
-3. Copiar `backend/.env.example` para `backend/.env` e preencher as credenciais.
-4. Na pasta `backend`: `composer install`.
-5. Iniciar a API: `php -S 127.0.0.1:8080 -t public`.
-6. Na pasta `frontend`: `npm install` e `npm start`.
-7. Abrir `http://localhost:4200`. O proxy Angular encaminha `/api` para `127.0.0.1:8080`.
+## Executar localmente com Docker (recomendado)
 
-## Criar o primeiro administrador
-No terminal do servidor, dentro de `backend/`, executar:
+Requisitos: Windows 10/11 com Docker Desktop e WSL 2, ou Docker Engine + Docker Compose.
+
+1. Descarregue o ZIP da branch `feat/lirandzu-platform` ou clone o repositório.
+2. Abra um terminal na pasta do projecto.
+3. Execute:
 
 ```bash
+docker compose up --build
+```
+
+4. Abra:
+   - Frontend: http://localhost:4200
+   - API: http://localhost:8080/api/health
+   - MySQL: localhost:3307 (base `lirandzu`, utilizador `lirandzu`, palavra-passe `lirandzu_local`)
+
+A primeira inicialização cria a base de dados e aplica automaticamente o schema e as migrações. Os dados ficam no volume Docker `lirandzu_db`.
+
+Para parar: `docker compose down`.
+
+Para apagar também a base de dados local e começar de novo (ATENÇÃO: elimina os dados do volume): `docker compose down -v`.
+
+## Executar sem Docker
+
+### Requisitos
+- PHP 8.2+ com extensões PDO e pdo_mysql
+- Composer 2
+- Node.js 22+
+- MySQL 8 ou MariaDB recente
+
+### 1. Base de dados
+Execute, pela ordem, no MySQL/MariaDB:
+
+```sql
+SOURCE database/schema.sql;
+SOURCE database/migrations/001_expand_intermediation_model.sql;
+SOURCE database/migrations/002_auth_rate_limits.sql;
+```
+
+### 2. Backend
+```bash
+cd backend
+cp .env.example .env
+composer install
+php -S 127.0.0.1:8080 -t public
+```
+
+Edite `backend/.env` com as credenciais da sua base de dados.
+
+### 3. Frontend
+Noutro terminal:
+```bash
+cd frontend
+npm install
+npm start
+```
+
+Abra http://localhost:4200. O proxy de desenvolvimento encaminha os pedidos `/api` para o backend em `127.0.0.1:8080`.
+
+## Criar o primeiro administrador
+
+Depois de instalar as dependências PHP e configurar a base de dados:
+
+```bash
+cd backend
 php bin/create-admin.php "Administrador LIRANDZU" admin@seudominio.mz "UmaSenha-Forte-com-12"
 ```
 
-Não usar a palavra-passe de exemplo em produção.
+Use uma palavra-passe única com pelo menos 12 caracteres. Não reutilize credenciais de exemplo.
 
-## Portais e regras de negócio
-- **Cliente:** descobre fornecedores activos e submete pedidos à equipa LIRANDZU.
-- **Fornecedor:** candidata-se ou é registado pela administração; só é publicado após aprovação. Depois de aprovado, gere o próprio perfil, múltiplas categorias, serviços, preços e galeria.
-- **Administração:** gere categorias, fornecedores, candidaturas, clientes, pedidos e comunicações; pode cadastrar fornecedores directamente, encaminhar mensagens para cada parte e actualizar o estado dos pedidos.
-- **Intermediação obrigatória:** as comunicações entre cliente e fornecedor são mediadas pela LIRANDZU. Não disponibilizar contactos directos nem canais privados entre as partes na aplicação.
-- Apenas fornecedores activos e aprovados podem aparecer no catálogo.
-- O cliente acompanha o pedido pela referência LIRANDZU e pode enviar mensagens à equipa; a equipa encaminha as respostas, sem expor contactos directos.
-- A negociação e o pagamento podem ser tratados fora da plataforma nesta fase; não existe processamento de pagamentos integrado no MVP.
+## Estrutura do projecto
 
-## Segurança antes de produção
-Configurar HTTPS, domínio exacto em `FRONTEND_URL`, cookies Secure, backups, rate limiting no login e monitorização. Nunca publicar ficheiros `.env`. Registar acções administrativas e limitar o acesso aos dados pessoais dos clientes à equipa autorizada.
+```
+backend/                 API PHP, autenticação e testes
+  bin/                   Comandos administrativos
+  public/                Ponto de entrada REST
+  src/                   Classes PHP
+  tests/                 Testes smoke e integração SQL
+database/                Schema e migrações SQL
+docs/                    Segurança e fluxos de negócio
+frontend/                Aplicação Angular
+.github/workflows/       Integração contínua
+docker-compose.yml       Ambiente local completo
+```
 
-## Estado
-Implementação em evolução. A migração 001 amplia a estrutura relacional para clientes, múltiplas categorias, serviços, galeria, histórico de pedidos, notificações e auditoria. A API e os três portais já incluem operações iniciais para gerir serviços/galeria, responder e encaminhar mensagens, acompanhar pedidos e registar fornecedores pela administração. A integração ainda requer validação funcional e revisão de segurança. Antes de produção, executar build Angular, testes PHP, testes integrados MySQL/MariaDB e revisão de privacidade/segurança.
+## Regras de negócio essenciais
+- Apenas fornecedores aprovados e activos aparecem no catálogo.
+- Um fornecedor pode candidatar-se ou ser registado pela administração.
+- A administração decide a aprovação e controla estado, verificação e destaque.
+- O fornecedor gere o próprio perfil, serviços, categorias e portfólio.
+- A LC CONSULTORIA intermedeia as mensagens entre cliente e fornecedor.
+- Os contactos privados dos clientes não são expostos no catálogo nem no portal do fornecedor.
+- Não existe processamento de pagamentos integrado nesta versão.
 
-## Testes de integração
-O workflow GitHub Actions executa build Angular, lint PHP, smoke tests e uma tarefa MySQL 8 que aplica `database/schema.sql` e `database/migrations/001_expand_intermediation_model.sql`, validando as tabelas e colunas essenciais.
+## Segurança e produção
+Leia [docs/SECURITY.md](docs/SECURITY.md) antes de publicar. O ambiente Docker é apenas para desenvolvimento local e usa credenciais de conveniência. Em produção configure HTTPS, segredos fortes, backups, domínio CORS exacto, monitorização, política de retenção e revisão de segurança. Não publique ficheiros `.env`.
 
+## Verificações
+```bash
+cd frontend && npm install && npm run build
+cd ../backend && composer install && composer test
+``
 
-### Segurança e gestão operacional (actualização)
-- A administração pode gerir categorias (criar, editar, ordenar e activar/desactivar) sem apagar referências históricas.
-- A lista de pedidos administrativos aceita filtros por estado, cidade, referência, cliente ou fornecedor.
-- O acesso de fornecedores inclui edição de serviços existentes.
-- O catálogo abre páginas públicas individuais com categorias, serviços, portfólio e pedido de contacto mediado.
-- A autenticação limita tentativas falhadas por combinação de e-mail e endereço IP: após oito falhas dentro da janela de 15 minutos, bloqueia novas tentativas durante 15 minutos. A tabela é criada pela migração `002_auth_rate_limits.sql`.
-
-
-### Novas funcionalidades e segurança
-- Perfis públicos individuais de fornecedores com portfólio, serviços e pedido de contacto mediado.
-- Gestão administrativa de categorias e filtros avançados de pedidos.
-- Histórico de transições de estado dos pedidos visível no painel.
-- Caixa de notificações para administradores e fornecedores.
-- Protecção CSRF por token de sessão nas operações autenticadas.
-- Limitação de tentativas falhadas de login (migração `002_auth_rate_limits.sql`).
-
-Para instalar/actualizar a base de dados, executar pela ordem:
-1. `database/schema.sql`
-2. `database/migrations/001_expand_intermediation_model.sql`
-3. `database/migrations/002_auth_rate_limits.sql`
-
-As notificações internas são apresentadas nos painéis; envio de e-mail/SMS e armazenamento binário de imagens ainda exigem configuração e desenvolvimento próprios.
+A CI também aplica o schema e as migrações numa instância MySQL de teste.
