@@ -193,6 +193,9 @@ if($method==='GET'){$s=$db->prepare("SELECT id,sender_role,message,created_at FR
 $message=trim((string)($body['message']??''));if(strlen($message)<2||strlen($message)>5000)Http::json(['error'=>'A resposta deve ter entre 2 e 5000 caracteres.'],422);
 $db->beginTransaction();$s=$db->prepare("INSERT INTO request_messages(request_id,sender_user_id,sender_role,delivery_target,message) VALUES(?,?,'provider','internal',?)");$s->execute([(int)$m[1],$u['id'],$message]);$s=$db->prepare("UPDATE service_requests SET status='answered' WHERE id=? AND status IN ('submitted','forwarded')");$s->execute([(int)$m[1]]);$audit($db,(int)$u['id'],'provider_request_reply','service_request',(int)$m[1]);$notifyRole($db,'admin','Resposta de fornecedor recebida','Um fornecedor respondeu a um pedido e aguarda encaminhamento.','provider_reply','service_request',(int)$m[1]);$db->commit();Http::json(['ok'=>true,'message'=>'Resposta enviada à equipa LIRANDZU para revisão e encaminhamento.'],201);
 }
+if(preg_match('#^/api/admin/requests/(\\d+)/history$#',$path,$m)&&$method==='GET'){
+Http::role('admin');$s=$db->prepare('SELECT h.id,h.old_status,h.new_status,h.note,h.created_at,u.name changed_by FROM request_status_history h LEFT JOIN users u ON u.id=h.changed_by WHERE h.request_id=? ORDER BY h.created_at DESC,h.id DESC');$s->execute([(int)$m[1]]);Http::json(['data'=>$s->fetchAll()]);
+}
 if(preg_match('#^/api/admin/requests/(\\d+)/messages$#',$path,$m)&&in_array($method,['GET','POST'],true)){
 $u=Http::role('admin');$rid=(int)$m[1];$s=$db->prepare('SELECT id FROM service_requests WHERE id=?');$s->execute([$rid]);if(!$s->fetch())Http::json(['error'=>'Pedido não encontrado.'],404);
 if($method==='GET'){$s=$db->prepare('SELECT id,sender_user_id,sender_role,delivery_target,message,created_at FROM request_messages WHERE request_id=? ORDER BY created_at,id');$s->execute([$rid]);Http::json(['data'=>$s->fetchAll()]);}
